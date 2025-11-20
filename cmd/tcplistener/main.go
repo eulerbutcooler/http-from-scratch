@@ -1,9 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"io"
+	"http/internal/request"
 	"log"
 	"net"
 	"os"
@@ -18,37 +17,39 @@ func getReadFromFile() *os.File {
 	return f
 }
 
-func getLinesChannel(f io.ReadCloser) <-chan string {
-	out := make(chan string, 1)
-	go func() {
-		defer f.Close()
-		defer fmt.Println("Channel closed") // This will be printed after the channel is closed.
-		defer close(out)
-		str := ""
-		for {
-			data := make([]byte, 8)
-			n, err := f.Read(data)
-			if err != nil {
-				break
-			}
-			data = data[:n]
-			if i := bytes.IndexByte(data, '\n'); i != -1 {
-				str += string(data[:i])
-				data = data[i+1:]
-				out <- str
-				str = ""
-			} else {
-				str += string(data)
-			}
-		}
+// func getLinesChannel(f io.ReadCloser) <-chan string {
+// 	out := make(chan string, 1)
+// 	go func() {
+// 		defer f.Close()
+// 		defer fmt.Println("Channel closed") // This will be printed after the channel is closed.
+// 		defer close(out)
+// 		str := ""
+// 		for {
+// 			data := make([]byte, 8)
+// 			n, err := f.Read(data)
+// 			if err != nil {
+// 				break
+// 			}
+// 			data = data[:n]
+// 			for len(data) > 0 {
+// 				if i := bytes.IndexByte(data, '\n'); i != -1 {
+// 					str += string(data[:i])
+// 					out <- str
+// 					str = ""
+// 					data = data[i+1:]
+// 				} else {
+// 					str += string(data)
+// 					data = nil
+// 				}
+// 			}
+// 		}
 
-		if len(str) != 0 {
-			out <- str
-		}
-	}()
-
-	return out
-}
+// 		if len(str) != 0 {
+// 			out <- str
+// 		}
+// 	}()
+// 	return out
+// }
 
 func main() {
 	listener, err := net.Listen("tcp", ":42069")
@@ -64,9 +65,14 @@ func main() {
 		if err != nil {
 			log.Fatal("error: ", err)
 		}
-		for line := range getLinesChannel(conn) {
-			fmt.Printf("%s\n", line)
+		r, err := request.RequestFromReader(conn)
+		if err != nil {
+			log.Fatal("error: ", err)
 		}
+		fmt.Printf("Request line: \n")
+		fmt.Printf("- Method: %s\n", r.RequestLine.Method)
+		fmt.Printf(" - Target: %s\n", r.RequestLine.RequestTarget)
+		fmt.Printf(" - Version: %s\n", r.RequestLine.HttpVersion)
 	}
 
 	// *** For Reading from file ***
