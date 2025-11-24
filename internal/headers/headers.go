@@ -3,6 +3,7 @@ package headers
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"strings"
 )
 
@@ -18,18 +19,30 @@ func NewHeaders() *Headers {
 	}
 }
 
-func (h *Headers) Get(name string) string {
-	return h.headers[strings.ToLower(name)]
+func (h *Headers) Get(name string) (string, bool) {
+	str, ok := h.headers[strings.ToLower(name)]
+	return str, ok
 }
 
 func (h *Headers) Set(name, value string) {
-	h.headers[strings.ToLower(name)] = value
+	name = strings.ToLower(name)
+	if v, ok := h.headers[name]; ok {
+		h.headers[name] = fmt.Sprintf("%s,%s", v, value)
+	} else {
+		h.headers[name] = value
+	}
+}
+
+func (h *Headers) Foreach(cb func(n, v string)) {
+	for n, v := range h.headers {
+		cb(n, v)
+	}
 }
 
 func isToken(name string) bool {
 	for _, ch := range name {
 		found := false
-		if ch > 'A' && ch < 'Z' || ch > 'a' && ch < 'z' || ch > '0' && ch < '9' {
+		if ch >= 'A' && ch <= 'Z' || ch > 'a' && ch < 'z' || ch > '0' && ch < '9' {
 			found = true
 		}
 		switch ch {
@@ -55,6 +68,7 @@ func parseHeader(fieldLine []byte) (string, string, error) {
 		}
 		return string(name), string(val), nil
 	} else {
+		slog.Info("parseHeader", "fieldLine", string(fieldLine))
 		return "", "", fmt.Errorf("malformed field line")
 	}
 }

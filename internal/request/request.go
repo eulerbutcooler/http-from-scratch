@@ -3,14 +3,18 @@ package request
 import (
 	"bytes"
 	"fmt"
+	"http/internal/headers"
 	"io"
+	"strconv"
 )
 
 type parserState string
 
 const (
-	StateInit parserState = "init"
-	StateDone parserState = "done"
+	StateInit    parserState = "init"
+	StateHeaders parserState = "headers"
+	StateDone    parserState = "done"
+	StateBody    parserState = "body"
 )
 
 type RequestLine struct {
@@ -22,11 +26,27 @@ type RequestLine struct {
 type Request struct {
 	RequestLine RequestLine
 	state       parserState
+	headers     *headers.Headers
+	body        string
+}
+
+func getInt(headers *headers.Headers, name string, defaultValue int) int {
+	valStr, exists := headers.Get(name)
+	if !exists {
+		return defaultValue
+	}
+	value, err := strconv.Atoi(valStr)
+	if err != nil {
+		return defaultValue
+	}
+	return value
 }
 
 func newRequest() *Request {
 	return &Request{
-		state: StateInit,
+		state:   StateInit,
+		headers: headers.NewHeaders(),
+		body:    "",
 	}
 }
 
@@ -63,9 +83,10 @@ func (r *Request) parse(data []byte) (int, error) {
 	read := 0
 outer:
 	for {
+		currentData := data[read:]
 		switch r.state {
 		case StateInit:
-			rl, n, err := parseRequestLine(data[read:])
+			rl, n, err := parseRequestLine(currentData)
 			if err != nil {
 				return 0, err
 			}
@@ -74,7 +95,38 @@ outer:
 			}
 			r.RequestLine = *rl
 			read += n
-			r.state = StateDone
+			r.state = StateHeaders
+		case StateHeaders:
+			n, done, err := r.headers.Parse(currentData)
+			if err != nil {
+				return 0, err
+			}
+			if n == 0 {
+				break outer
+			}
+
+			read += n
+			if done {
+				r.state = StateBody
+			}
+		case StateBody:
+			//currentData = current chunk of raw bytes being processed
+			//length = total expected body size
+			length := getInt(r.headers, "content-length", 0)
+			if length == 0 {
+				r.state = StateDone
+				break
+			}
+			remaining := length - len(r.body)
+			// toRead = data left to be read
+			toRead := min(remaining, len(currentData))
+			// r.body == string that accumulates the body data as its parsed
+			r.body += string(currentData[:toRead])
+			// read = counter tracking how many bytes have been consumed from currentData
+			read += toRead
+			if len(r.body) == length {
+				r.state = StateDone
+			}
 		case StateDone:
 			break outer
 		}
@@ -85,6 +137,14 @@ outer:
 
 func (r *Request) done() bool {
 	return r.state == StateDone
+}
+
+func (r *Request) Headers() *headers.Headers {
+	return r.headers
+}
+
+func (r *Request) Body() string {
+	return r.body
 }
 
 func RequestFromReader(reader io.Reader) (*Request, error) {

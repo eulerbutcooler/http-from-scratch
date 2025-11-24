@@ -73,6 +73,11 @@ func main() {
 		fmt.Printf("- Method: %s\n", r.RequestLine.Method)
 		fmt.Printf(" - Target: %s\n", r.RequestLine.RequestTarget)
 		fmt.Printf(" - Version: %s\n", r.RequestLine.HttpVersion)
+		fmt.Printf("Headers:\n")
+		r.Headers().Foreach(func(n, v string) {
+			fmt.Printf("- %s: %s \n", n, v)
+		})
+		fmt.Printf("Body: %s", r.Body())
 	}
 
 	// *** For Reading from file ***
