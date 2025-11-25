@@ -62,9 +62,15 @@ func TestHeaders(t *testing.T) {
 	r, err := RequestFromReader(reader)
 	require.NoError(t, err)
 	require.NotNil(t, r)
-	assert.Equal(t, "localhost:42069", r.headers.Get("host"))
-	assert.Equal(t, "curl/7.81.0", r.headers.Get("user-agent"))
-	assert.Equal(t, "*/*", r.headers.Get("accept"))
+	host, hostOk := r.headers.Get("host")
+	assert.True(t, hostOk)
+	assert.Equal(t, "localhost:42069", host)
+	userAgent, userAgentOk := r.headers.Get("user-agent")
+	assert.True(t, userAgentOk)
+	assert.Equal(t, "curl/7.81.0", userAgent)
+	accept, acceptOk := r.headers.Get("accept")
+	assert.True(t, acceptOk)
+	assert.Equal(t, "*/*", accept)
 
 	// Test: Malformed Header
 	reader = &chunkReader{
@@ -88,7 +94,7 @@ func TestParseBody(t *testing.T) {
 	r, err := RequestFromReader(reader)
 	require.NoError(t, err)
 	require.NotNil(t, r)
-	assert.Equal(t, "hello world!\n", string(r.Body))
+	assert.Equal(t, "hello world!\n", r.Body)
 
 	// Test: Body shorter than reported content length
 	reader = &chunkReader{
