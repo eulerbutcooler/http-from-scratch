@@ -1,17 +1,29 @@
 package main
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"http/internal/headers"
 	"http/internal/request"
 	"http/internal/response"
 	"http/internal/server"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 )
 
 const port uint16 = 42069
+
+func toStr(bytes []byte) string {
+	out := ""
+	for _, b := range bytes {
+		out += fmt.Sprintf("%02x", b)
+	}
+	return out
+}
 
 func respond200() []byte {
 	return []byte(`<html>
@@ -54,11 +66,49 @@ func main() {
 		h := response.GetDefaultHeaders(0)
 		body := respond200()
 		status := response.StatusOK
-		switch req.RequestLine.RequestTarget {
-		case "/yourproblem":
+		switch {
+		case strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/"):
+			target := req.RequestLine.RequestTarget
+			res, err := http.Get("https://httpbin.org" + target[len("/httpbin"):])
+			if err != nil {
+				body = respond500()
+				status = response.StatusInternalServerError
+			} else {
+				w.WriteStatusLine(response.StatusOK)
+				h.Delete("Content-length")
+				h.Set("Transfer-encoding", "chunked")
+				h.Replace("Content-type", "text/plain")
+				h.Set("Trailer", "X-Content-SHA256")
+				h.Set("Trailer", "X-Content-Length")
+				w.WriteHeaders(*h)
+
+				fullBody := []byte{}
+				for {
+					data := make([]byte, 1024)
+					n, err := res.Body.Read(data)
+					if err != nil {
+						break
+					}
+					if n > 0 {
+						fullBody = append(fullBody, data[:n]...)
+						w.WriteBody(fmt.Appendf(nil, "%x\r\n", n))
+						w.WriteBody(data[:n])
+						w.WriteBody([]byte("\r\n"))
+					}
+				}
+				w.WriteBody([]byte("0\r\n"))
+				trailer := headers.NewHeaders()
+				out := sha256.Sum256(fullBody)
+				trailer.Set("X-Content-SHA256", toStr(out[:]))
+				trailer.Set("X-Content-Length", fmt.Sprintf("%d", len(fullBody)))
+				w.WriteHeaders(*trailer)
+				return
+			}
+
+		case req.RequestLine.RequestTarget == "/yourproblem":
 			body = respond400()
 			status = response.StatusBadRequest
-		case "/myproblem":
+		case req.RequestLine.RequestTarget == "/myproblem":
 			body = respond500()
 			status = response.StatusInternalServerError
 		}
