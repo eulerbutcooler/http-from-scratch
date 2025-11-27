@@ -104,7 +104,19 @@ func main() {
 				w.WriteHeaders(*trailer)
 				return
 			}
-
+		case req.RequestLine.RequestTarget == "/video":
+			f, err := os.ReadFile("assets/vim.mp4")
+			if err != nil {
+				body = respond500()
+				status = response.StatusInternalServerError
+				break
+			}
+			h.Replace("Content-type", "video/mp4")
+			h.Replace("Content-length", fmt.Sprintf("%d", len(f)))
+			w.WriteStatusLine(response.StatusOK)
+			w.WriteHeaders(*h)
+			w.WriteBody(f)
+			return
 		case req.RequestLine.RequestTarget == "/yourproblem":
 			body = respond400()
 			status = response.StatusBadRequest

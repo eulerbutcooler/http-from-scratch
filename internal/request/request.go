@@ -149,7 +149,7 @@ func (r *Request) Body() string {
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
 	request := newRequest()
-	buf := make([]byte, 1024)
+	buf := make([]byte, 8192)
 	bufLen := 0
 	for !request.done() {
 		n, err := reader.Read(buf[bufLen:])

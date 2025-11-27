@@ -5,6 +5,7 @@ import (
 	"http/internal/request"
 	"http/internal/response"
 	"io"
+	"log"
 	"net"
 )
 
@@ -25,10 +26,12 @@ func runConnection(s *Server, conn io.ReadWriteCloser) {
 	responseWriter := response.NewWriter(conn)
 	r, err := request.RequestFromReader(conn)
 	if err != nil {
+		log.Printf("Request parsing failed: %v", err)
 		responseWriter.WriteStatusLine(response.StatusBadRequest)
 		responseWriter.WriteHeaders(*response.GetDefaultHeaders(0))
 		return
 	}
+	log.Printf("Request parsed successfully: %s %s", r.RequestLine.Method, r.RequestLine.RequestTarget)
 	s.handler(responseWriter, r)
 }
 

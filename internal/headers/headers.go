@@ -52,7 +52,7 @@ func (h *Headers) Foreach(cb func(n, v string)) {
 func isToken(name string) bool {
 	for _, ch := range name {
 		found := false
-		if ch >= 'A' && ch <= 'Z' || ch > 'a' && ch < 'z' || ch > '0' && ch < '9' {
+		if ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9' {
 			found = true
 		}
 		switch ch {
