@@ -120,6 +120,9 @@ outer:
 			remaining := length - len(r.body)
 			// toRead = data left to be read
 			toRead := min(remaining, len(currentData))
+			if toRead == 0 {
+				break outer
+			}
 			// r.body == string that accumulates the body data as its parsed
 			r.body += string(currentData[:toRead])
 			// read = counter tracking how many bytes have been consumed from currentData
@@ -153,17 +156,31 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	bufLen := 0
 	for !request.done() {
 		n, err := reader.Read(buf[bufLen:])
-		if err != nil {
+
+		// Handle EOF: if we get EOF and no data, we're done reading
+		if err == io.EOF {
+			if n == 0 {
+				return nil, fmt.Errorf("unexpected EOF: request incomplete (state: %s)", request.state)
+			}
+			// If n > 0, process the final chunk of data before handling EOF
+		} else if err != nil {
 			return nil, err
 		}
+
 		bufLen += n
 		readN, err := request.parse(buf[:bufLen])
 		if err != nil {
 			return nil, err
 		}
+		//Checks only when the buffer is full and no progress has been made
+		if bufLen >= len(buf) && readN == 0 {
+			return nil, fmt.Errorf("request too large or malformed: buffer full but unable to parse (state: %s)", request.state)
+		}
+		if n == 0 && readN == 0 {
+			return nil, fmt.Errorf("stuck: no data read and no parsing progress (state: %s)", request.state)
+		}
 		copy(buf, buf[readN:bufLen])
 		bufLen -= readN
-
 	}
 
 	return request, nil
